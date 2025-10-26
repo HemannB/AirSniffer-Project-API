@@ -85,6 +85,34 @@ app.post("/sensores", async (req, res) => {
   }
 });
 
+app.get("/sensores", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM air_data ORDER BY created_at DESC LIMIT 100`
+    );
+
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error("Erro ao buscar dados:", err.message);
+    res.status(500).json({ status: "error", message: err.message });
+  }
+});
+
+app.get("/historico", async (req, res) => {
+  const { horas = 24 } = req.query;
+  try {
+    const result = await pool.query(
+      `SELECT * FROM air_data WHERE created_at >= NOW() - INTERVAL '${horas} hours' ORDER BY created_at`
+    );
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error("Erro ao buscar histórico:", err.message);
+    res.status(500).json({ status: "error", message: err.message });
+  }
+});
+
+
+
 // ======================
 // ====== SERVER ========
 // ======================
