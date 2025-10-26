@@ -1,35 +1,93 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const { Pool } = require('pg');
+// ============================================
+// ==========   AirSniffer Mk1  ===============
+// ============================================
+// Author: Bruno Hemann
+// Advisor: Prof. Me. Laurence Crestani Tasca
+// ============================================
 
+import express from "express";
+import pg from "pg";
+import "dotenv/config";
+
+// ======================
+// ===== CONSTANTS =====
+// ======================
+const { Pool } = pg;
 const app = express();
-app.use(bodyParser.json());
+const PORT = process.env.PORT || 3000;
 
-// Conexão com Neon PostgreSQL
+// ======================
+// === MIDDLEWARES =====
+// ======================
+app.use(express.json());
+
+// ================================
+// ==== DATABASE CONFIGURATION ====
+// ================================
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: process.env.DATABASE_URL?.includes("neon.tech")
+    ? { rejectUnauthorized: false }
+    : false, 
 });
 
-// Recebe dados do ESP32
-app.post('/sensores', async (req, res) => {
+(async () => {
+  try {
+    const client = await pool.connect();
+    console.log("Connected to NeonDB successfully!");
+    client.release();
+  } catch (err) {
+    console.error("Database connection failed:", err.message);
+  }
+})();
+
+// ======================
+// ====== ROUTES ========
+// ======================
+
+// Check route
+app.get("/", (_, res) => {
+  res.status(200).send({ status: "ok", message: "AirSniffer API running" });
+});
+
+// Main sensor data route
+app.post("/sensores", async (req, res) => {
   const { temperature, humidity, aqi, co2_ppm, tvoc_ppb, gases_ppm } = req.body;
 
+  if (
+    [temperature, humidity, aqi, co2_ppm, tvoc_ppb, gases_ppm].some(
+      (v) => v === undefined
+    )
+  ) {
+    return res
+      .status(400)
+      .json({ status: "error", message: "Missing required sensor fields" });
+  }
+
   try {
-    await pool.query(
-      `INSERT INTO air_data (temperature, humidity, aqi, co2_ppm, tvoc_ppb, gases_ppm) 
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [temperature, humidity, aqi, co2_ppm, tvoc_ppb, gases_ppm]
+    const query = `
+      INSERT INTO air_data 
+      (temperature, humidity, aqi, co2_ppm, tvoc_ppb, gases_ppm)
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `;
+    const values = [temperature, humidity, aqi, co2_ppm, tvoc_ppb, gases_ppm];
+
+    await pool.query(query, values);
+
+    console.log(
+      `Inserted: T=${temperature}°C | H=${humidity}% | AQI=${aqi}`
     );
-    res.status(200).send({ status: 'ok' });
+
+    res.status(200).json({ status: "ok" });
   } catch (err) {
-    console.error(err);
-    res.status(500).send({ status: 'error', message: err.message });
+    console.error("Database insert error:", err.message);
+    res.status(500).json({ status: "error", message: err.message });
   }
 });
 
-// Teste da API
-app.get('/', (req, res) => res.send('API AirSniffer rodando!'));
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+// ======================
+// ====== SERVER ========
+// ======================
+app.listen(PORT, () =>
+  console.log(`AirSniffer API running on http://localhost:${PORT}`)
+);
