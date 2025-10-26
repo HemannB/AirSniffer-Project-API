@@ -15,6 +15,9 @@ import "dotenv/config";
 const { Pool } = pg;
 const app = express();
 const PORT = process.env.PORT || 3000;
+const cors = require('cors');
+app.use(cors());
+
 
 // ======================
 // === MIDDLEWARES =====
